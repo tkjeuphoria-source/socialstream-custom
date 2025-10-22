@@ -65,9 +65,14 @@ window.addEventListener("DOMContentLoaded", () => {
   const observer = new MutationObserver(mutations => {
     for (const mutation of mutations) {
       for (const node of mutation.addedNodes) {
-        if (node.nodeType === 1 && node.classList.contains("chat-item")) {
+        if (
+          node.nodeType === 1 &&
+          (node.classList.contains("chat-item") ||
+           node.classList.contains("message-row") ||
+           node.classList.contains("chat-row"))
+        ) {
           const username = node.querySelector(".username")?.innerText || "User";
-          const message = node.querySelector(".message")?.innerText || "";
+          const message = node.querySelector(".message")?.innerText || node.innerText || "";
           showPopup(username, message);
         }
       }
