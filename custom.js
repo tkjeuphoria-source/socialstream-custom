@@ -99,3 +99,6 @@ window.addEventListener("DOMContentLoaded", () => {
     }, 5000);
   }
 });
+
+console.log("✅ custom.js loaded!");
+alert("Custom.js berhasil jalan!");
