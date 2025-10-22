@@ -102,3 +102,6 @@ window.addEventListener("DOMContentLoaded", () => {
 
 console.log("✅ custom.js loaded!");
 alert("Custom.js berhasil jalan!");
+alert("✅ custom.js via jsDelivr berhasil dijalankan!");
+console.log("✅ custom.js via jsDelivr aktif!");
+
