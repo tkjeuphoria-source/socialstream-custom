@@ -6,25 +6,22 @@
 <title>Notif WA iPhone Style — Social Stream Ninja</title>
 
 <style>
-  /* Transparan untuk OBS */
   html,body { background: transparent; margin:0; padding:0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial; }
 
-  /* Container posisi kanan atas (mirip iPhone notif) */
   #notif-root {
     position: fixed;
     top: 22px;
     right: 16px;
     width: 320px;
-    pointer-events: none; /* biar overlay tidak mengganggu klik OBS */
+    pointer-events: none;
     z-index: 9999;
   }
 
-  /* Satu notifikasi */
   .notif {
     display: flex;
     gap: 12px;
     align-items: flex-start;
-    background: rgba(255,255,255,0.96); /* iPhone putih sedikit transparan */
+    background: rgba(255,255,255,0.96);
     -webkit-backdrop-filter: blur(6px);
     backdrop-filter: blur(6px);
     border-radius: 14px;
@@ -54,10 +51,7 @@
   }
   .avatar img { width:100%; height:100%; object-fit:cover; display:block; }
 
-  .content {
-    flex: 1;
-    min-width: 0;
-  }
+  .content { flex: 1; min-width: 0; }
 
   .meta {
     display:flex;
@@ -69,7 +63,7 @@
   .name {
     font-weight:600;
     font-size:15px;
-    color:#0b1226; /* dark */
+    color:#0b1226;
     line-height:1;
     white-space:nowrap;
     text-overflow:ellipsis;
@@ -89,57 +83,39 @@
     margin-top:2px;
     line-height:1.25;
     display:block;
-    max-height:3.25em; /* clamp to 2 lines approx */
+    max-height:3.25em;
     overflow:hidden;
     text-overflow:ellipsis;
   }
 
-  /* small "badge" like iPhone unread indicator (optional) */
-  .badge {
-    background: #34c759; /* green WA-like */
-    color: white;
-    font-size:11px;
-    padding:4px 8px;
-    border-radius:999px;
-    margin-left:auto;
-    display:inline-block;
-    font-weight:600;
-  }
-
-  /* minimal responsive */
   @media (max-width:420px){
     #notif-root { right:10px; left:10px; width: auto; }
     .notif { padding:8px; }
   }
 </style>
 </head>
-<body>
+
+<body data-session="8k6zc8A7p5">
   <div id="notif-root" aria-live="polite"></div>
 
 <script>
-/*
-  Simple SSE listener for Social Stream Ninja.
-  The endpoint pattern (server-sent events) is:
-    https://io.socialstream.ninja/sse/{sessionID}
-  We expect incoming events to have JSON with fields like:
-    { "username":"Nama", "message":"isi pesan", "avatar":"https://...", "timestamp":"2025-10-27T..." }
-  (The exact payload may vary; adapt the mapping below if needed.)
-  Docs: Social Stream Ninja API / Commands & SSE.
-*/
-
 (function(){
-  // Try to get session ID from URL param ?session=...
-  function getSessionFromUrl(){
+  function getSession(){
     const url = new URL(location.href);
-    return url.searchParams.get('session') || document.body.datasetSession || null;
+    return url.searchParams.get('session') || document.body.dataset.session || null;
   }
 
-  const session = getSessionFromUrl();
+  const session = getSession();
+  const ROOT = document.getElementById('notif-root');
 
-  const NOTIF_ROOT = document.getElementById('notif-root');
+  if(!session){
+    console.warn("Session ID belum diset. Tambahkan ?session=YOUR_ID di URL atau set data-session di <body>.");
+    return;
+  }
 
-  // Helper create notif element
-  function createNotif({username='Unknown', message='(no message)', avatar='', time=''}) {
+  function escapeHtml(s){ return String(s).replace(/[&<>"']/g, m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
+
+  function createNotif({username='User', message='', avatar='', time=''}) {
     const el = document.createElement('div');
     el.className = 'notif';
     el.innerHTML = `
@@ -151,78 +127,41 @@
           <div class="time">${escapeHtml(time)}</div>
         </div>
         <div class="message">${escapeHtml(message)}</div>
-      </div>
-    `;
+      </div>`;
     return el;
   }
 
-  // HTML-escape (simple)
-  function escapeHtml(s){ return String(s).replace(/[&<>"']/g, function(m){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m];}); }
-
-  // Show notification (animate in, remove after timeout)
   function showNotif(data){
     const n = createNotif(data);
-    NOTIF_ROOT.prepend(n); // newest on top
-    // trigger animation
+    ROOT.prepend(n);
     requestAnimationFrame(()=> n.classList.add('show'));
-
-    // remove after 6s (fade out)
     setTimeout(()=> {
       n.classList.remove('show');
-      // remove from DOM after transition
       setTimeout(()=> n.remove(), 300);
     }, 6000);
   }
 
-  // If no session provided, print sample messages for preview
-  if(!session){
-    // preview if opened directly
-    showNotif({username:'Ihdar', message:'Halo! ini notifikasi test — siap tampil di stream!', avatar:'https://i.pravatar.cc/150?img=12', time:new Date().toLocaleTimeString()});
-    setTimeout(()=> showNotif({username:'Mira', message:'Jangan lupa set volume vokal ya!', avatar:'https://i.pravatar.cc/150?img=22', time:new Date().toLocaleTimeString()}), 1400);
-    return;
-  }
-
-  // Build SSE URL
   const sseUrl = 'https://io.socialstream.ninja/sse/' + encodeURIComponent(session);
+  const evt = new EventSource(sseUrl, { withCredentials: true });
 
-  try {
-    const evt = new EventSource(sseUrl, { withCredentials: true });
+  evt.onopen = ()=> console.log('✅ Terhubung ke Social Stream Ninja SSE');
+  evt.onerror = e => console.warn('⚠️ SSE Error:', e);
 
-    evt.onopen = function(){ console.info('SSE connected to Social Stream Ninja'); };
-    evt.onerror = function(e){ console.warn('SSE error', e); };
+  function handleIncoming(raw){
+    let obj;
+    try { obj = JSON.parse(raw); } catch(e){ obj = { message: raw }; }
 
-    // social stream might emit event types; we handle generic 'message' and 'chat' events
-    evt.addEventListener('message', function(e){
-      handleIncoming(e.data);
-    });
+    const username = obj.username || obj.user || obj.author || 'Guest';
+    const message = obj.message || obj.text || '';
+    const avatar  = obj.avatar || (obj.user && obj.user.avatar) || '';
+    const ts      = obj.timestamp || obj.time || new Date().toISOString();
+    const timestr = (new Date(ts)).toLocaleTimeString();
 
-    evt.addEventListener('chat', function(e){
-      handleIncoming(e.data);
-    });
-
-    // generic handler: try parse JSON or fallback
-    function handleIncoming(raw){
-      let obj;
-      try { obj = JSON.parse(raw); } catch (err) {
-        // fallback: treat raw as message
-        obj = { username:'Guest', message: raw, avatar:'', timestamp: new Date().toISOString() };
-      }
-
-      // Map possible fields (adjust if your payload naming differs)
-      const username = obj.username || obj.user || obj.author || (obj.data && obj.data.username) || 'Guest';
-      const message = obj.message || obj.text || (obj.data && obj.data.message) || JSON.stringify(obj).slice(0,120);
-      const avatar  = obj.avatar || (obj.user && obj.user.avatar) || '';
-      const ts      = obj.timestamp || obj.time || obj.date || new Date().toISOString();
-      const timestr = (new Date(ts)).toLocaleTimeString();
-
-      showNotif({ username, message, avatar, time: timestr });
-    }
-  } catch (err) {
-    console.error('Cannot open SSE:', err);
-    // fallback: show offline message
-    showNotif({username:'System', message:'Gagal konek ke SSE — periksa session ID atau koneksi.', avatar:'', time:new Date().toLocaleTimeString()});
+    showNotif({ username, message, avatar, time: timestr });
   }
 
+  evt.addEventListener('message', e => handleIncoming(e.data));
+  evt.addEventListener('chat', e => handleIncoming(e.data));
 })();
 </script>
 </body>
